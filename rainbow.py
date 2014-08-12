@@ -1,6 +1,6 @@
 # Python 3
 
-import pickle, hashlib, itertools, binascii
+import pickle, hashlib, itertools, binascii, gzip
 
 def create_table(hash_type, alphabet_type, range_start, range_end):
     """Creates a rainbow table of hash_type using the alphabet from alphabet_type.
@@ -26,6 +26,8 @@ def create_table(hash_type, alphabet_type, range_start, range_end):
                  "mixalpha_numeric_space": mixcase + digits + space}
         
     alphabet = alphabets[alphabet_type]
+    
+    print("Creating combinations...")
     combinations = ()
     for i in range(range_start, range_end+1):
         combinations += tuple(itertools.product(alphabet, repeat=i))
@@ -42,6 +44,7 @@ def create_table(hash_type, alphabet_type, range_start, range_end):
     else:
         raise Exception("Bad hash name")
     
+    print("Hashing...")
     rainbow_table = {}
     for combination in combinations:
         combination = b''.join(combination)
@@ -53,14 +56,17 @@ def create_table(hash_type, alphabet_type, range_start, range_end):
         rainbow_table[digest] = combination # Add entry {hash: data}
         
     file = "tables/{}_{}#{}-{}".format(hash_type, alphabet_type, range_start, range_end)
-        
-    with open(file + '.pickle', 'wb') as f:
+    
+    print("Writing to file...")
+    with gzip.open(file + '.pickle', 'wb') as f:
         pickle.dump(rainbow_table, f, pickle.HIGHEST_PROTOCOL)
+    
+    print("Done!")
         
         
 def table_lookup(hash_value, file):
     """Looks up a hash from a pre-computed rainbow table as file."""
-    with open(file + '.pickle', 'rb') as f:
+    with gzip.open(file + '.pickle', 'rb') as f:
         rainbow_table = pickle.load(f)
             
     try:
@@ -72,6 +78,6 @@ def table_lookup(hash_value, file):
 
 def main():
     create_table("sha256", "mixalpha_numeric_space", 1, 3)
-    # print(table_lookup("1fad0e4bfb59d3c0e8229ede1f6d26b3", "md5_loweralpha_numeric_space#1-4"))
+    # print(table_lookup("1fad0e4bfb59d3c0e8229ede1f6d26b3", "tables/md5_loweralpha_numeric_space#1-4"))
 
 main()
