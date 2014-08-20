@@ -1,6 +1,9 @@
-# Python 3
+# Use python 3
 
-import pickle, hashlib, itertools, binascii, gzip
+import pickle, hashlib, itertools, binascii
+
+# Constants
+TABLE_SIZE = 8000000
 
 def create_table(hash_type, alphabet_type, range_start, range_end):
     """Creates a rainbow table of hash_type using the alphabet from alphabet_type.
@@ -28,10 +31,14 @@ def create_table(hash_type, alphabet_type, range_start, range_end):
     alphabet = alphabets[alphabet_type]
     
     print("Creating combinations...")
-    combinations = ()
-    for i in range(range_start, range_end+1):
-        combinations += tuple(itertools.product(alphabet, repeat=i))
-    combinations = iter(combinations)
+    # Generator of products of all lengths
+    def create_combinations():
+        for i in range(range_start, range_end+1): 
+            yield itertools.product(alphabet, repeat=i) 
+    
+    # Flatten combinations into single generator
+    combinations = itertools.chain.from_iterable(create_combinations())
+    
     
     if hash_type == "md5":
         h = hashlib.md5()
@@ -44,10 +51,25 @@ def create_table(hash_type, alphabet_type, range_start, range_end):
     else:
         raise Exception("Bad hash name")
     
-    print("Hashing...")
-    rainbow_table = {}
+
+    rainbow_table = {} 
+
+    i = 0
+    file_number = 0
+    file = "tables/{}_{}#{}-{}_".format(hash_type, alphabet_type, range_start, range_end)
+    file_full = file + str(file_number)
+    
+    print("Hashing, writing to file...")
+    
+    def write_to_file(file_name):
+        # Optional: use gzip
+        # import gzip
+        with open(file_name + '.p', 'wb') as f:
+            pickle.dump(rainbow_table, f, pickle.HIGHEST_PROTOCOL)
+        
+    
     for combination in combinations:
-        combination = b''.join(combination)
+        combination = b''.join(combination) # Single bytestring
         
         current_hash = h.copy() # New hash object
         current_hash.update(combination)
@@ -55,18 +77,25 @@ def create_table(hash_type, alphabet_type, range_start, range_end):
         
         rainbow_table[digest] = combination # Add entry {hash: data}
         
-    file = "tables/{}_{}#{}-{}".format(hash_type, alphabet_type, range_start, range_end)
-    
-    print("Writing to file...")
-    with gzip.open(file + '.pickle', 'wb') as f:
-        pickle.dump(rainbow_table, f, pickle.HIGHEST_PROTOCOL)
-    
+        if i == TABLE_SIZE: # Reset for new file
+            file_full = file + str(file_number)
+            print("*File", file_number)
+            write_to_file(file_full)
+            
+            i = 0
+            file_number += 1    
+            rainbow_table = {}
+        
+        i += 1
+
+    write_to_file(file_full) # Last file write
+
     print("Done!")
         
         
 def table_lookup(hash_value, file):
     """Looks up a hash from a pre-computed rainbow table as file."""
-    with gzip.open(file + '.pickle', 'rb') as f:
+    with gzip.open(file + '.p', 'rb') as f:
         rainbow_table = pickle.load(f)
             
     try:
@@ -77,7 +106,7 @@ def table_lookup(hash_value, file):
     
 
 def main():
-    create_table("sha256", "mixalpha_numeric_space", 1, 3)
-    # print(table_lookup("1fad0e4bfb59d3c0e8229ede1f6d26b3", "tables/md5_loweralpha_numeric_space#1-4"))
+    create_table("md5", "loweralpha_numeric_space", 1, 5)
+    #print(table_lookup("1fad0e4bfb59d3c0e8229ede1f6d26b3", "tables/md5_loweralpha_numeric_space#1-4_0"))
 
 main()
