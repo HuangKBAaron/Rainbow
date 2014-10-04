@@ -3,25 +3,17 @@
 import pickle, hashlib, itertools, binascii
 
 # Constants
-TABLE_SIZE = 8000000
+LOOKUP_TABLE_SIZE = 8000000
 
 
-def create_table(hash_type, alphabet_type, range_start, range_end):
-    """Creates a rainbow table of hash_type using the alphabet from alphabet_type.
-    The table will be made of all combinations of length range_start to range_end
-    and will be written to a file. 
-    
-    Alphabets: loweralpha, loweralpha_numeric, loweralpha_numeric_space
-               mixalpha_numeric, mixalpha_numeric_space
-               
-    Hashes: md5, sha1, sha256, sha512  
-   """
-    if range_end >= 5:
-        print("That's a big file - Are you sure?")
+
+def create_combinations(alphabet_type, range_start, range_end):
+    """Create a generator of all combinations of alphabet_type from
+    range_start to range_end."""
     
     # Bytestring constants
     lowercase = [x.encode(encoding='utf-8') for x in "abcdefghijklmnopqrstuvwxyz"]
-    mixcase = lowercase + [x.encode(encoding='utf=8') for x in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"]
+    mixcase = lowercase + [x.encode(encoding='utf-8') for x in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"]
     digits = [x.encode(encoding='utf-8') for x in "0123456789"]
     space = [" ".encode(encoding='utf-8')]
     
@@ -29,20 +21,49 @@ def create_table(hash_type, alphabet_type, range_start, range_end):
                  "loweralpha_numeric": lowercase + digits,
                  "loweralpha_numeric_space": lowercase + digits + space,
                  "mixalpha_numeric": mixcase + digits,
-                 "mixalpha_numeric_space": mixcase + digits + space}
+                 "mixalpha_numeric_space": mixcase + digits + space,
+                 }
         
     alphabet = alphabets[alphabet_type]
     
     print("Generating combinations...")
+    
     # Generator of products of all lengths
-    def create_combinations():
+    def create_all():
         for i in range(range_start, range_end+1): 
             yield itertools.product(alphabet, repeat=i) 
     
     # Flatten combinations into single generator
-    combinations = itertools.chain.from_iterable(create_combinations())
+    return itertools.chain.from_iterable(create_all())
+
+
+def write_to_file(file_name, table):
+    # Optional: use gzip
+    # import gzip
+    with open(file_name + '.p', 'wb') as f:
+        pickle.dump(table, f, pickle.HIGHEST_PROTOCOL)
+
+
+
+def create_table(table_type, hash_type, alphabet_type, range_start, range_end):
+    """Creates a lookup table of hash_type using the alphabet from alphabet_type.
+    The table will be made of all combinations of length range_start to range_end
+    and will be written to a file. 
     
+    Alphabets:  loweralpha, loweralpha_numeric, loweralpha_numeric_space
+                mixalpha_numeric, mixalpha_numeric_space
+    Table type: lookup, rainbow
+               
+    Hashes:     md5, sha1, sha256, sha512  
+   """
+   # Friendly warning
+    if range_end >= 5:
+        print("That's a big file - Are you sure?")
+        
     
+    combinations = create_combinations(alphabet_type, range_start, range_end)
+    
+    # Create hashlib object 
     if hash_type == "md5":
         h = hashlib.md5()
     elif hash_type == "sha1":
@@ -53,47 +74,44 @@ def create_table(hash_type, alphabet_type, range_start, range_end):
         h = hashlib.sha512()
     else:
         raise Exception("Bad hash name")
+      
+      
+    file = "tables/{}_{}#{}-{}".format(hash_type, alphabet_type, range_start, range_end)
     
-
-    rainbow_table = {} 
-
-    i = 0
-    file_number = 0
-    file = "tables/{}_{}#{}-{}_".format(hash_type, alphabet_type, range_start, range_end)
-    file_full = file + str(file_number)
-    
-    print("Hashing, writing to file...")
-    
-    def write_to_file(file_name):
-        # Optional: use gzip
-        # import gzip
-        with open(file_name + '.p', 'wb') as f:
-            pickle.dump(rainbow_table, f, pickle.HIGHEST_PROTOCOL)
+    if table_type == "lookup":
+        count = 0
+        file_number = 0
+        file_full = file + "_" + str(file_number)
         
-    
-    for combination in combinations:
-        combination = b''.join(combination) # Single bytestring
-        
-        current_hash = h.copy() # New hash object
-        current_hash.update(combination)
-        digest = current_hash.digest()
-        
-        rainbow_table[digest] = combination # Add entry {hash: data}
-        
-        if i == TABLE_SIZE: # Reset for new file
-            file_full = file + str(file_number)
-            print("*File", file_number)
-            write_to_file(file_full)
+        print("Hashing, writing to file...")
             
-            file_number += 1    
-            rainbow_table = {}
-            i = 0
+        lookup_table = {} 
         
-        i += 1
-
-    write_to_file(file_full) # Last file write
-
-    print("Done! Dictionary entries:", file_number*TABLE_SIZE+i+1) # Starting from 0
+        for combination in combinations:
+            combination = b''.join(combination) # Single bytestring
+            
+            current_hash = h.copy() # New hash object
+            current_hash.update(combination)
+            digest = current_hash.digest()
+            
+            lookup_table[digest] = combination # Add entry {hash: data}
+            
+            if count == LOOKUP_TABLE_SIZE: # Reset for new file
+                file_full = file + "_" + str(file_number)
+                print("*File", file_number)
+                write_to_file(file_full, lookup_table)
+                
+                file_number += 1    
+                lookup_table = {}
+                count = 0
+            
+            count += 1
+    
+        write_to_file(file_full, lookup_table) # Last file write
+        print(lookup_table)
+        
+        # Starting from 0
+        print("Done! Dictionary entries:", file_number*LOOKUP_TABLE_SIZE+count+1) 
         
         
 def table_lookup(hash_value, file):
@@ -110,10 +128,10 @@ def table_lookup(hash_value, file):
         
         if os.path.isfile(full_path): # If numbered file exists
             with open(full_path, 'rb') as f:
-                rainbow_table = pickle.load(f)
+                lookup_table = pickle.load(f)
 
             try:
-                data = rainbow_table[binascii.unhexlify(hash_value)]
+                data = lookup_table[binascii.unhexlify(hash_value)]
                 return "Original text: " + data.decode(encoding='utf-8')
                 break
             except:
@@ -123,7 +141,7 @@ def table_lookup(hash_value, file):
     
 
 def main():
-    create_table("md5", "loweralpha_numeric_space", 0, 5)
-    #print(table_lookup("5d41402abc4b2a76b9719d911017c592", "tables/md5_mixalpha_numeric_space#0-4"))
+    create_table("lookup", "md5", "mixalpha_numeric_space", 0, 2)
+    print(table_lookup("fcfdc12fb4030a8c8a2e19cf7b075926", "tables/md5_mixalpha_numeric_space#0-2"))
 
 main()
