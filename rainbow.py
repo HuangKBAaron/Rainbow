@@ -9,7 +9,11 @@ LOOKUP_TABLE_SIZE = 8000000
 
 def create_combinations(alphabet_type, range_start, range_end):
     """Create a generator of all combinations of alphabet_type from
-    range_start to range_end."""
+    range_start to range_end.
+    
+    Alphabets:  loweralpha, loweralpha_numeric, loweralpha_numeric_space
+                mixalpha_numeric, mixalpha_numeric_space
+    """
     
     # Bytestring constants
     lowercase = [x.encode(encoding='utf-8') for x in "abcdefghijklmnopqrstuvwxyz"]
@@ -34,7 +38,9 @@ def create_combinations(alphabet_type, range_start, range_end):
             yield itertools.product(alphabet, repeat=i) 
     
     # Flatten combinations into single generator
-    return itertools.chain.from_iterable(create_all())
+    combinations = itertools.chain.from_iterable(create_all())      
+        
+    return combinations
 
 
 def write_to_file(file_name, table):
@@ -42,28 +48,13 @@ def write_to_file(file_name, table):
     # import gzip
     with open(file_name + '.p', 'wb') as f:
         pickle.dump(table, f, pickle.HIGHEST_PROTOCOL)
-
-
-
-def create_table(table_type, hash_type, alphabet_type, range_start, range_end):
-    """Creates a lookup table of hash_type using the alphabet from alphabet_type.
-    The table will be made of all combinations of length range_start to range_end
-    and will be written to a file. 
-    
-    Alphabets:  loweralpha, loweralpha_numeric, loweralpha_numeric_space
-                mixalpha_numeric, mixalpha_numeric_space
-    Table type: lookup, rainbow
-               
-    Hashes:     md5, sha1, sha256, sha512  
-   """
-   # Friendly warning
-    if range_end >= 5:
-        print("That's a big file - Are you sure?")
         
+        
+def create_hashlib(hash_type):
+    """Creates hashlib object.
     
-    combinations = create_combinations(alphabet_type, range_start, range_end)
-    
-    # Create hashlib object 
+    Hashes: md5, sha1, sha256, sha512
+    """
     if hash_type == "md5":
         h = hashlib.md5()
     elif hash_type == "sha1":
@@ -74,48 +65,66 @@ def create_table(table_type, hash_type, alphabet_type, range_start, range_end):
         h = hashlib.sha512()
     else:
         raise Exception("Bad hash name")
-      
+    
+    return h
+
+
+
+def create_lookup_table(hash_type, alphabet_type, range_start, range_end):
+    """Creates a lookup table of hash_type using the alphabet from alphabet_type.
+    The table will be made of all combinations of length range_start to range_end
+    and will be written to a file. 
+    
+    See create_hashlib for hashes that can created and create_combinations for
+    possible alphabet types.
+   """
+   # Friendly warning
+    if range_end >= 5:
+        print("That's a big file - Are you sure?")
+        
+
+    combinations = create_combinations(alphabet_type, range_start, range_end)
+    h = create_hashlib(hash_type)
       
     file = "tables/{}_{}#{}-{}".format(hash_type, alphabet_type, range_start, range_end)
     
-    if table_type == "lookup":
-        count = 0
-        file_number = 0
-        file_full = file + "_" + str(file_number)
-        
-        print("Hashing, writing to file...")
-            
-        lookup_table = {} 
-        
-        for combination in combinations:
-            combination = b''.join(combination) # Single bytestring
-            
-            current_hash = h.copy() # New hash object
-            current_hash.update(combination)
-            digest = current_hash.digest()
-            
-            lookup_table[digest] = combination # Add entry {hash: data}
-            
-            if count == LOOKUP_TABLE_SIZE: # Reset for new file
-                file_full = file + "_" + str(file_number)
-                print("*File", file_number)
-                write_to_file(file_full, lookup_table)
-                
-                file_number += 1    
-                lookup_table = {}
-                count = 0
-            
-            count += 1
+    count = 0
+    file_number = 0
+    file_full = file + "_" + str(file_number)
     
-        write_to_file(file_full, lookup_table) # Last file write
-        print(lookup_table)
+    print("Hashing, writing to file...")
         
-        # Starting from 0
-        print("Done! Dictionary entries:", file_number*LOOKUP_TABLE_SIZE+count+1) 
+    lookup_table = {} 
+    
+    for combination in combinations:
+        combination = b''.join(combination) # Single bytestring
+        
+        current_hash = h.copy() # New hash object
+        current_hash.update(combination)
+        digest = current_hash.digest()
+        
+        lookup_table[digest] = combination # Add entry {hash: data}
+        
+        if count == LOOKUP_TABLE_SIZE: # Reset for new file
+            file_full = file + "_" + str(file_number)
+            print("*File", file_number)
+            write_to_file(file_full, lookup_table)
+            
+            file_number += 1    
+            lookup_table = {}
+            count = 0
+        
+        count += 1
+
+    write_to_file(file_full, lookup_table) # Last file write
+    #print(lookup_table)
+    
+    # Starting from 0
+    print("Done! Dictionary entries:", file_number*LOOKUP_TABLE_SIZE+count+1) 
         
         
 def table_lookup(hash_value, file):
-    """Looks up a hash from a pre-computed rainbow table as file.
+    """Looks up a hash from a pre-computed lookup table as file.
     
     Enter your file name in up to the character range (ex. 1-5)
     """
@@ -141,7 +150,7 @@ def table_lookup(hash_value, file):
     
 
 def main():
-    create_table("lookup", "md5", "mixalpha_numeric_space", 0, 2)
+    create_lookup_table("md5", "mixalpha_numeric_space", 0, 2)
     print(table_lookup("fcfdc12fb4030a8c8a2e19cf7b075926", "tables/md5_mixalpha_numeric_space#0-2"))
 
 main()

@@ -7,8 +7,7 @@ For details on the alphabets and hashes supported, type in `help(function)`.
 
 **To-do:** 
 - (Optional) Rewrite with json or SQLite3 support 
-- More documentation
-
+- Automatic multi-file system
 
 
 Alternate names: Need Hash Now, Rainbow Hash
