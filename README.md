@@ -7,6 +7,7 @@ For details on the alphabets and hashes supported, type in `help(function)`.
 
 **To-do:** 
 - (Optional) Rewrite with json or SQLite3 support 
+- Turn pre-computed hash chains into rainbow tables
 - Automatic multi-file system
 
 

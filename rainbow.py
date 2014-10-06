@@ -1,9 +1,12 @@
 # Use python 3
-
-import pickle, hashlib, itertools, binascii
+import pickle, hashlib
 
 # Constants
 LOOKUP_TABLE_SIZE = 8000000
+HASH_CHAIN_LENGTH = 1000
+# Chance hash chains don't have plaintext (ignoring collisions)
+PLAINTEXT_MISS = 0.01 
+
 
 
 
@@ -14,11 +17,12 @@ def create_combinations(alphabet_type, range_start, range_end):
     Alphabets:  loweralpha, loweralpha_numeric, loweralpha_numeric_space
                 mixalpha_numeric, mixalpha_numeric_space
     """
+    import string, itertools
     
     # Bytestring constants
-    lowercase = [x.encode(encoding='utf-8') for x in "abcdefghijklmnopqrstuvwxyz"]
-    mixcase = lowercase + [x.encode(encoding='utf-8') for x in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"]
-    digits = [x.encode(encoding='utf-8') for x in "0123456789"]
+    lowercase = [x.encode(encoding='utf-8') for x in string.ascii_lowercase]
+    mixcase = lowercase + [x.encode(encoding='utf-8') for x in string.ascii_uppercase]
+    digits = [x.encode(encoding='utf-8') for x in string.digits]
     space = [" ".encode(encoding='utf-8')]
     
     alphabets = {"loweralpha": lowercase, 
@@ -40,7 +44,7 @@ def create_combinations(alphabet_type, range_start, range_end):
     # Flatten combinations into single generator
     combinations = itertools.chain.from_iterable(create_all())      
         
-    return combinations
+    return (combinations, len(alphabet))
 
 
 def write_to_file(file_name, table):
@@ -83,7 +87,7 @@ def create_lookup_table(hash_type, alphabet_type, range_start, range_end):
         print("That's a big file - Are you sure?")
         
 
-    combinations = create_combinations(alphabet_type, range_start, range_end)
+    combinations = create_combinations(alphabet_type, range_start, range_end)[0]
     h = create_hashlib(hash_type)
       
     file = "tables/{}_{}#{}-{}".format(hash_type, alphabet_type, range_start, range_end)
@@ -128,7 +132,7 @@ def table_lookup(hash_value, file):
     
     Enter your file name in up to the character range (ex. 1-5)
     """
-    import os.path
+    import os.path, binascii
     file_number = 0
     
     while True:
@@ -146,11 +150,32 @@ def table_lookup(hash_value, file):
             except:
                 file_number += 1
         else:
-            raise Exception("Hash not found!")
+            raise Exception("Hash not found or file doesn't exist!")
+        
+        
+def create_rainbow_table(hash_type, alphabet_type, length):
+    """Creates pre-computed hash chains (currently) of hash_type using the 
+    alphabet of alphabet_type. Each password is length long. 
     
-
-def main():
-    create_lookup_table("md5", "mixalpha_numeric_space", 0, 2)
-    print(table_lookup("fcfdc12fb4030a8c8a2e19cf7b075926", "tables/md5_mixalpha_numeric_space#0-2"))
-
-main()
+    See create_hashlib for hashes that can created and create_combinations for
+    possible alphabet types.
+    """
+    import math
+    
+    combinations, chars = create_combinations(alphabet_type, length, length)
+    h = create_hashlib(hash_type)
+    
+    file_full = "tables/{}_{}#{}".format(hash_type, alphabet_type, length)
+    
+    # miss = (1 - 1/(num chars)^length)^(total hashes)
+    total_hashes = math.log(PLAINTEXT_MISS) / math.log(1 - 1/chars**length)
+    chains = int(total_hashes / HASH_CHAIN_LENGTH) 
+    
+    print(chains)
+    
+    
+    
+    
+create_rainbow_table("md5", "mixalpha_numeric", 2)
+    
+    
